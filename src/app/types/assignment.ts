@@ -21,3 +21,4 @@ export interface AssignmentWithPriority extends Assignment {
 export type ViewMode = 'list' | 'calendar';
 export type SortBy = 'dueDate' | 'course' | 'priority';
 export type FilterBy = 'all' | 'incomplete' | 'completed';
+

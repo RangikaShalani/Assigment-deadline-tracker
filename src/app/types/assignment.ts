@@ -2,6 +2,7 @@ export type PriorityLevel = 'high' | 'medium' | 'low';
 
 export interface Assignment {
   id: string;
+  firestoreId?: string;
   courseId: string;
   courseName: string;
   courseColor: string;

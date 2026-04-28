@@ -25,7 +25,9 @@ function getAssignmentsCollection() {
 }
 
 function serializeAssignment(assignment: Assignment): AssignmentDocument {
-  const { firestoreId: _firestoreId, ...assignmentData } = assignment;
+  const assignmentData = { ...assignment };
+
+  delete assignmentData.firestoreId;
 
   return {
     ...assignmentData,

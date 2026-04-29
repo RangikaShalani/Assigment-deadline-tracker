@@ -13,7 +13,7 @@ jobs:
   deploy:
     runs-on: ubuntu-latest
 
-    if: github.event.workflow_run.conclusion == 'success'
+    if: ${{ github.event.workflow_run.conclusion == 'success' || github.event_name != 'workflow_run' }}
 
     steps:
       - name: Checkout code
@@ -35,9 +35,15 @@ jobs:
 
       - name: Smoke Test (Staging URL)
         run: |
-          curl -f https://staging--YOUR_PROJECT.web.app || exit 1
+          curl -f https://assignment-deadline-trac-7bd75.web.app || exit 1
 
       - name: Deploy to Production (Blue Switch)
         run: |
           firebase deploy --only hosting \
           --token "${{ secrets.FIREBASE_TOKEN }}"
+
+
+
+
+
+          

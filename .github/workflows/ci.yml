@@ -7,7 +7,8 @@ on:
     branches: [staging, main]
 
 jobs:
-  build-test:
+  build:
+    name: Build
     runs-on: ubuntu-latest
 
     steps:
@@ -22,168 +23,293 @@ jobs:
       - name: Install dependencies
         run: npm install
 
-      - name: Prepare CI logs
-        run: mkdir -p ci-logs
-
-      - name: Lint check
-        id: lint
+      - name: Build project (Vite)
         shell: bash
         run: |
-          set +e
-          npm run lint 2>&1 | tee ci-logs/lint.log
-          status=${PIPESTATUS[0]}
-          echo "exit_code=$status" >> "$GITHUB_OUTPUT"
-          if [ "$status" -eq 0 ]; then
-            echo "result=PASS" >> "$GITHUB_OUTPUT"
-          else
-            echo "result=FAIL" >> "$GITHUB_OUTPUT"
-          fi
-          exit 0
+          set -o pipefail
+          mkdir -p ci-logs
+          npm run build 2>&1 | tee ci-logs/build.log
 
-      - name: Lint failure details
-        if: ${{ always() && steps.lint.outputs.exit_code != '0' }}
+      - name: Build summary
+        if: ${{ always() }}
+        shell: bash
+        run: |
+          {
+            echo "## Build Summary"
+            echo ""
+            echo "- Result: ${{ job.status }}"
+            echo "- Log: \`ci-logs/build.log\`"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload build output
+        if: ${{ success() }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: dist-build-${{ github.sha }}
+          path: dist
+
+  lint:
+    name: Lint
+    runs-on: ubuntu-latest
+    needs: build
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 18
+
+      - name: Install dependencies
+        run: npm install
+
+      - name: Run lint
+        shell: bash
+        run: |
+          set -o pipefail
+          mkdir -p ci-logs
+          npm run lint 2>&1 | tee ci-logs/lint.log
+
+      - name: Lint summary
+        if: ${{ always() }}
+        shell: bash
+        run: |
+          {
+            echo "## Lint Summary"
+            echo ""
+            echo "- Result: ${{ job.status }}"
+            echo "- Log: \`ci-logs/lint.log\`"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Failure log tail
+        if: ${{ failure() }}
         shell: bash
         run: |
           echo "::group::Lint failure details"
-          echo "Lint failed with exit code ${{ steps.lint.outputs.exit_code }}"
-          echo "Last 80 lines from ci-logs/lint.log:"
           tail -n 80 ci-logs/lint.log
           echo "::endgroup::"
 
-      - name: Run tests
-        id: tests
+  test:
+    name: Test
+    runs-on: ubuntu-latest
+    needs: build
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 18
+
+      - name: Install dependencies
+        run: npm install
+
+      - name: Run unit tests
         shell: bash
         run: |
-          set +e
+          set -o pipefail
+          mkdir -p ci-logs
           npm test 2>&1 | tee ci-logs/test.log
-          status=${PIPESTATUS[0]}
-          echo "exit_code=$status" >> "$GITHUB_OUTPUT"
-          if [ "$status" -eq 0 ]; then
-            echo "result=PASS" >> "$GITHUB_OUTPUT"
-          else
-            echo "result=FAIL" >> "$GITHUB_OUTPUT"
-          fi
-          exit 0
 
-      - name: Test failure details
-        if: ${{ always() && steps.tests.outputs.exit_code != '0' }}
+      - name: Test summary
+        if: ${{ always() }}
+        shell: bash
+        run: |
+          {
+            echo "## Test Summary"
+            echo ""
+            echo "- Result: ${{ job.status }}"
+            echo "- Log: \`ci-logs/test.log\`"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Failure log tail
+        if: ${{ failure() }}
         shell: bash
         run: |
           echo "::group::Test failure details"
-          echo "Tests failed with exit code ${{ steps.tests.outputs.exit_code }}"
-          echo "Last 80 lines from ci-logs/test.log:"
           tail -n 80 ci-logs/test.log
           echo "::endgroup::"
 
-      - name: Build project (Vite)
-        id: build
-        shell: bash
-        run: |
-          set +e
-          npm run build 2>&1 | tee ci-logs/build.log
-          status=${PIPESTATUS[0]}
-          echo "exit_code=$status" >> "$GITHUB_OUTPUT"
-          if [ "$status" -eq 0 ]; then
-            echo "result=PASS" >> "$GITHUB_OUTPUT"
-          else
-            echo "result=FAIL" >> "$GITHUB_OUTPUT"
-          fi
-          exit 0
+  security-scan:
+    name: Security Scan
+    runs-on: ubuntu-latest
+    needs: build
 
-      - name: Build failure details
-        if: ${{ always() && steps.build.outputs.exit_code != '0' }}
-        shell: bash
-        run: |
-          echo "::group::Build failure details"
-          echo "Build failed with exit code ${{ steps.build.outputs.exit_code }}"
-          echo "Last 80 lines from ci-logs/build.log:"
-          tail -n 80 ci-logs/build.log
-          echo "::endgroup::"
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 18
+
+      - name: Install dependencies
+        run: npm install
 
       - name: Security audit
-        id: security
         shell: bash
         run: |
-          set +e
+          set -o pipefail
+          mkdir -p ci-logs
           npm audit --audit-level=high 2>&1 | tee ci-logs/security.log
-          status=${PIPESTATUS[0]}
-          echo "exit_code=$status" >> "$GITHUB_OUTPUT"
-          if [ "$status" -eq 0 ]; then
-            echo "result=PASS" >> "$GITHUB_OUTPUT"
-          else
-            echo "result=FAIL" >> "$GITHUB_OUTPUT"
-          fi
-          exit 0
 
-      - name: Security failure details
-        if: ${{ always() && steps.security.outputs.exit_code != '0' }}
+      - name: Security summary
+        if: ${{ always() }}
         shell: bash
         run: |
-          echo "::group::Security audit failure details"
-          echo "Security audit failed with exit code ${{ steps.security.outputs.exit_code }}"
-          echo "Last 80 lines from ci-logs/security.log:"
+          {
+            echo "## Security Summary"
+            echo ""
+            echo "- Result: ${{ job.status }}"
+            echo "- Log: \`ci-logs/security.log\`"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Failure log tail
+        if: ${{ failure() }}
+        shell: bash
+        run: |
+          echo "::group::Security scan failure details"
           tail -n 80 ci-logs/security.log
           echo "::endgroup::"
 
-      - name: CI build summary
+  staging-e2e:
+    name: Staging E2E
+    runs-on: ubuntu-latest
+    needs: [build, lint, test, security-scan]
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 18
+
+      - name: Install dependencies
+        run: npm install
+
+      - name: Download build output
+        uses: actions/download-artifact@v4
+        with:
+          name: dist-build-${{ github.sha }}
+          path: dist
+
+      - name: Install Playwright browser
+        run: npx playwright@1.52.0 install --with-deps chromium
+
+      - name: Run staging E2E smoke test
+        shell: bash
+        run: |
+          set -o pipefail
+          mkdir -p ci-logs
+          npx vite preview --host 127.0.0.1 --port 4173 > ci-logs/vite-preview.log 2>&1 &
+          for attempt in $(seq 1 30); do
+            if curl -sf http://127.0.0.1:4173/ >/dev/null; then
+              break
+            fi
+            sleep 2
+          done
+          npx playwright@1.52.0 test e2e/staging-smoke.spec.ts --config=playwright.config.ts 2>&1 | tee ci-logs/staging-e2e.log
+
+      - name: Staging E2E summary
         if: ${{ always() }}
         shell: bash
         run: |
-          echo "::group::CI build summary"
-          echo "=== CI Build Summary ==="
-          echo "Lint result: ${{ steps.lint.outputs.result }}"
-          echo "Lint exit code: ${{ steps.lint.outputs.exit_code }}"
-          echo "Build result: ${{ steps.build.outputs.result }}"
-          echo "Build exit code: ${{ steps.build.outputs.exit_code }}"
-          echo "::endgroup::"
-
-          echo "::group::CI test summary"
-          echo "=== CI Test Summary ==="
-          echo "Test result: ${{ steps.tests.outputs.result }}"
-          echo "Test exit code: ${{ steps.tests.outputs.exit_code }}"
-          echo "Log file: ci-logs/test.log"
-          echo "::endgroup::"
-
-          echo "::group::CI security summary"
-          echo "=== CI Security Summary ==="
-          echo "Security audit result: ${{ steps.security.outputs.result }}"
-          echo "Security exit code: ${{ steps.security.outputs.exit_code }}"
-          echo "Log file: ci-logs/security.log"
-          echo "::endgroup::"
-
           {
-            echo "## CI Pipeline Summary"
+            echo "## Staging E2E Summary"
             echo ""
-            echo "| Gate | Result | Exit Code |"
-            echo "| --- | --- | --- |"
-            echo "| Lint | ${{ steps.lint.outputs.result }} | ${{ steps.lint.outputs.exit_code }} |"
-            echo "| Tests | ${{ steps.tests.outputs.result }} | ${{ steps.tests.outputs.exit_code }} |"
-            echo "| Build | ${{ steps.build.outputs.result }} | ${{ steps.build.outputs.exit_code }} |"
-            echo "| Security audit | ${{ steps.security.outputs.result }} | ${{ steps.security.outputs.exit_code }} |"
-            echo ""
-            echo "### Logs"
-            echo "- Lint log: \`ci-logs/lint.log\`"
-            echo "- Test log: \`ci-logs/test.log\`"
-            echo "- Build log: \`ci-logs/build.log\`"
-            echo "- Security log: \`ci-logs/security.log\`"
-            echo ""
-            if [ "${{ steps.lint.outputs.exit_code }}" != "0" ] || [ "${{ steps.tests.outputs.exit_code }}" != "0" ] || [ "${{ steps.build.outputs.exit_code }}" != "0" ] || [ "${{ steps.security.outputs.exit_code }}" != "0" ]; then
-              echo "### Failure details"
-              echo "- Check the grouped log sections above for the last 80 lines of the failed step output."
-            fi
+            echo "- Result: ${{ job.status }}"
+            echo "- Log: \`ci-logs/staging-e2e.log\`"
           } >> "$GITHUB_STEP_SUMMARY"
 
-      - name: Fail workflow if quality gates failed
+      - name: Failure log tail
+        if: ${{ failure() }}
+        shell: bash
+        run: |
+          echo "::group::Staging E2E failure details"
+          tail -n 80 ci-logs/vite-preview.log || true
+          tail -n 80 ci-logs/staging-e2e.log || true
+          echo "::endgroup::"
+
+  lighthouse-audit:
+    name: Lighthouse Audit
+    runs-on: ubuntu-latest
+    needs: [build, lint, test, security-scan]
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 18
+
+      - name: Install dependencies
+        run: npm install
+
+      - name: Download build output
+        uses: actions/download-artifact@v4
+        with:
+          name: dist-build-${{ github.sha }}
+          path: dist
+
+      - name: Run Lighthouse CI
+        shell: bash
+        run: |
+          set -o pipefail
+          mkdir -p ci-logs
+          npx @lhci/cli@0.15.1 autorun --config=.lighthouserc.json 2>&1 | tee ci-logs/lighthouse.log
+
+      - name: Lighthouse summary
         if: ${{ always() }}
         shell: bash
         run: |
-          if [ "${{ steps.lint.outputs.exit_code }}" != "0" ] || [ "${{ steps.tests.outputs.exit_code }}" != "0" ] || [ "${{ steps.build.outputs.exit_code }}" != "0" ] || [ "${{ steps.security.outputs.exit_code }}" != "0" ]; then
-            echo "One or more CI quality gates failed."
-            exit 1
-          fi
+          {
+            echo "## Lighthouse Summary"
+            echo ""
+            echo "- Result: ${{ job.status }}"
+            echo "- Log: \`ci-logs/lighthouse.log\`"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Failure log tail
+        if: ${{ failure() }}
+        shell: bash
+        run: |
+          echo "::group::Lighthouse failure details"
+          tail -n 80 ci-logs/lighthouse.log
+          echo "::endgroup::"
+
+  package-artifact:
+    name: Package Artifact
+    runs-on: ubuntu-latest
+    needs: [build, lint, test, security-scan, staging-e2e, lighthouse-audit]
+
+    steps:
+      - name: Download build output
+        uses: actions/download-artifact@v4
+        with:
+          name: dist-build-${{ github.sha }}
+          path: dist
+
+      - name: Package summary
+        shell: bash
+        run: |
+          {
+            echo "## Package Summary"
+            echo ""
+            echo "- Result: pending upload"
+            echo "- Source artifact: \`dist-build-${{ github.sha }}\`"
+            echo "- Final artifact: \`release-${{ github.sha }}\`"
+          } >> "$GITHUB_STEP_SUMMARY"
 
       - name: Upload build artifact
-        if: ${{ success() }}
         uses: actions/upload-artifact@v4
         with:
           name: release-${{ github.sha }}

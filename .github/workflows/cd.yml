@@ -5,21 +5,62 @@ on:
     workflows: ["CI Pipeline"]
     types: [completed]
     branches: [staging]
+  workflow_dispatch:
+    inputs:
+      rollback_version:
+        description: "Optional Firebase Hosting VERSION_ID to roll back to live"
+        required: false
+        type: string
+      rollback_reason:
+        description: "Reason for manual rollback"
+        required: false
+        default: "Manual rollback"
+        type: string
 
 permissions:
   actions: read
   contents: read
 
+env:
+  FIREBASE_PROJECT_ID: assignment-deadline-trac-7bd75
+  FIREBASE_SITE_ID: assignment-deadline-trac-7bd75
+  STAGING_CHANNEL_ID: staging
+  CANDIDATE_CHANNEL_ID: production-candidate
+  ROLLBACK_BACKUP_CHANNEL_ID: rollback-backup
+  PRODUCTION_URL: https://assignment-deadline-trac-7bd75.web.app
+  HEALTHCHECK_ATTEMPTS: "6"
+  HEALTHCHECK_DELAY_SECONDS: "10"
+  AUTO_ROLLBACK_RTO_MINUTES: "15"
+
 jobs:
   deploy:
     runs-on: ubuntu-latest
-    if: ${{ github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.head_branch == 'staging' && (github.event.workflow_run.event == 'push' || github.event.workflow_run.event == 'pull_request') }}
+    if: ${{ github.event_name == 'workflow_dispatch' || (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.head_branch == 'staging' && (github.event.workflow_run.event == 'push' || github.event.workflow_run.event == 'pull_request')) }}
 
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
 
+      - name: Determine release mode
+        id: mode
+        shell: bash
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ] && [ -n "${{ inputs.rollback_version }}" ]; then
+            echo "release_mode=rollback" >> "$GITHUB_OUTPUT"
+          else
+            echo "release_mode=deploy" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Validate manual dispatch input
+        if: ${{ github.event_name == 'workflow_dispatch' && !inputs.rollback_version }}
+        shell: bash
+        run: |
+          echo "workflow_dispatch is reserved for manual rollback in this pipeline."
+          echo "Provide a Firebase Hosting VERSION_ID in rollback_version."
+          exit 1
+
       - name: Download build artifact
+        if: ${{ steps.mode.outputs.release_mode == 'deploy' }}
         uses: actions/download-artifact@v4
         with:
           name: release-${{ github.event.workflow_run.head_sha }}
@@ -27,19 +68,270 @@ jobs:
           run-id: ${{ github.event.workflow_run.id }}
           github-token: ${{ secrets.GITHUB_TOKEN }}
 
+      - name: Progressive rollout release gate summary
+        working-directory: ${{ github.workspace }}
+        shell: bash
+        run: |
+          echo "::group::Success criteria for progressive rollout"
+          echo "=== Success Criteria for Progressive Rollout ==="
+          echo "LCP  < 2.5s   - target threshold for Lighthouse gate"
+          echo "CLS  < 0.1    - target threshold for Lighthouse gate"
+          echo "TBT  < 300ms  - target threshold for Lighthouse gate"
+          echo "Perf >= 90    - target threshold for Lighthouse gate"
+          echo "A11y >= 90    - target threshold for Lighthouse gate"
+          echo "::endgroup::"
+
+          echo "::group::Test stages and minimum coverage thresholds"
+          echo "=== Test Stages and Coverage Thresholds ==="
+          echo "Stage 1: CI quality gate before CD trigger"
+          echo "- Lint: 100% pass required"
+          echo "- Unit tests (Jest): 100% pass required"
+          echo "- Minimum code coverage target: Lines >= 80%, Statements >= 80%, Functions >= 75%, Branches >= 70%"
+          echo "- Build validation: 100% pass required"
+          echo "- Security audit: no high severity vulnerabilities"
+          echo ""
+          echo "Stage 2: Staging rollout validation"
+          echo "- Firebase staging deployment must succeed"
+          echo "- Smoke test on staging URL must return HTTP 200"
+          echo "- Critical user path coverage: login/load dashboard/create or view deadline path must be green"
+          echo ""
+          echo "Stage 3: Production validation and promotion"
+          echo "- Deploy to candidate preview channel first"
+          echo "- Monitor candidate health for ${HEALTHCHECK_ATTEMPTS} checks every ${HEALTHCHECK_DELAY_SECONDS}s"
+          echo "- Promote only the exact validated version to live"
+          echo "- If production validation fails, auto rollback to the saved previous live version"
+          echo "::endgroup::"
+
+          echo "::group::Rollback process and recovery target"
+          echo "=== Rollback Process and RTO ==="
+          echo "Rollback trigger:"
+          echo "- Candidate validation failure"
+          echo "- Production smoke test failure"
+          echo "- Production health degradation after promotion"
+          echo "- Error rate or availability alert breach"
+          echo ""
+          echo "Rollback process:"
+          echo "1. Save the current live version to a backup preview channel."
+          echo "2. Promote the candidate only after health checks pass."
+          echo "3. Auto rollback by cloning the saved backup channel back to live if production validation fails."
+          echo "4. Manual rollback is supported by VERSION_ID via workflow_dispatch."
+          echo ""
+          echo "Recovery Time Objective (RTO): ${AUTO_ROLLBACK_RTO_MINUTES} minutes from alert to restored stable service."
+          echo "::endgroup::"
+
+          echo "::group::Operational alerts and escalation paths"
+          echo "=== Alerts, Thresholds, and Escalation Paths ==="
+          echo "Alert 1: Availability degradation"
+          echo "- Threshold: candidate or production smoke test fails, or uptime drops below 99.5% in 5 minutes"
+          echo "- Escalation: notify on-call engineer immediately; escalate to engineering lead after 10 minutes"
+          echo ""
+          echo "Alert 2: Performance regression"
+          echo "- Threshold: LCP >= 2.5s, CLS >= 0.1, TBT >= 300ms, or Lighthouse performance score < 90"
+          echo "- Escalation: notify frontend owner immediately; escalate to product/engineering lead if unresolved in 30 minutes"
+          echo ""
+          echo "Alert 3: Application reliability issue"
+          echo "- Threshold: frontend error rate > 2% for 5 minutes or repeated failed critical user journeys"
+          echo "- Escalation: notify on-call engineer and engineering lead immediately; prepare rollback if unresolved in 15 minutes"
+          echo "::endgroup::"
+
+          {
+            echo "## Progressive Rollout Release Gate"
+            echo ""
+            echo "### Release mode"
+            echo "- Mode: ${{ steps.mode.outputs.release_mode }}"
+            echo ""
+            echo "### Success criteria"
+            echo "- LCP < 2.5s"
+            echo "- CLS < 0.1"
+            echo "- TBT < 300ms"
+            echo "- Performance >= 90"
+            echo "- Accessibility >= 90"
+            echo ""
+            echo "### Test stages and coverage thresholds"
+            echo "- CI gate: lint pass, unit test pass, build pass, no high severity vulnerabilities"
+            echo "- Coverage target: Lines >= 80%, Statements >= 80%, Functions >= 75%, Branches >= 70%"
+            echo "- Staging: deploy success and smoke test pass"
+            echo "- Candidate: deploy success and monitored health pass"
+            echo "- Production: deploy success and post-deploy validation pass"
+            echo ""
+            echo "### Rollback and RTO"
+            echo "- Backup current live release before promotion"
+            echo "- Roll back manually by VERSION_ID or automatically from saved live backup"
+            echo "- Recovery Time Objective: ${AUTO_ROLLBACK_RTO_MINUTES} minutes"
+          } >> "$GITHUB_STEP_SUMMARY"
+
       - name: Install Firebase CLI
         run: npm install -g firebase-tools
 
-      - name: Deploy to Firebase Staging (Green)
+      - name: Save current live release to rollback backup channel
+        if: ${{ steps.mode.outputs.release_mode == 'deploy' }}
+        shell: bash
         run: |
-          firebase hosting:channel:deploy staging \
-          --token "${{ secrets.FIREBASE_TOKEN }}"
+          echo "::group::Saving previous live deployment"
+          firebase hosting:clone \
+            "${FIREBASE_SITE_ID}:live" \
+            "${FIREBASE_SITE_ID}:${ROLLBACK_BACKUP_CHANNEL_ID}" \
+            --project "${FIREBASE_PROJECT_ID}" \
+            --token "${{ secrets.FIREBASE_TOKEN }}"
+          echo "Saved current live release to preview channel ${ROLLBACK_BACKUP_CHANNEL_ID}"
+          echo "::endgroup::"
+
+      - name: Deploy to Firebase Staging (Green)
+        if: ${{ steps.mode.outputs.release_mode == 'deploy' }}
+        run: |
+          firebase hosting:channel:deploy "${STAGING_CHANNEL_ID}" \
+            --project "${FIREBASE_PROJECT_ID}" \
+            --token "${{ secrets.FIREBASE_TOKEN }}"
+
+      - name: Resolve staging URL
+        if: ${{ steps.mode.outputs.release_mode == 'deploy' }}
+        id: staging
+        shell: bash
+        run: |
+          channel_url=$(firebase hosting:channel:open "${STAGING_CHANNEL_ID}" \
+            --project "${FIREBASE_PROJECT_ID}" \
+            --token "${{ secrets.FIREBASE_TOKEN }}" | tail -n 1)
+          echo "url=$channel_url" >> "$GITHUB_OUTPUT"
+          echo "Staging URL: $channel_url"
 
       - name: Smoke Test (Staging URL)
+        if: ${{ steps.mode.outputs.release_mode == 'deploy' }}
         run: |
-          curl -f https://assignment-deadline-trac-7bd75.web.app || exit 1
+          curl -f "${{ steps.staging.outputs.url }}" || exit 1
 
-      - name: Deploy to Production (Blue Switch)
+      - name: Deploy candidate release for production validation
+        if: ${{ steps.mode.outputs.release_mode == 'deploy' }}
         run: |
-          firebase deploy --only hosting \
-          --token "${{ secrets.FIREBASE_TOKEN }}"
+          firebase hosting:channel:deploy "${CANDIDATE_CHANNEL_ID}" \
+            --project "${FIREBASE_PROJECT_ID}" \
+            --expires 7d \
+            --token "${{ secrets.FIREBASE_TOKEN }}"
+
+      - name: Resolve candidate URL
+        if: ${{ steps.mode.outputs.release_mode == 'deploy' }}
+        id: candidate
+        shell: bash
+        run: |
+          channel_url=$(firebase hosting:channel:open "${CANDIDATE_CHANNEL_ID}" \
+            --project "${FIREBASE_PROJECT_ID}" \
+            --token "${{ secrets.FIREBASE_TOKEN }}" | tail -n 1)
+          echo "url=$channel_url" >> "$GITHUB_OUTPUT"
+          echo "Candidate URL: $channel_url"
+
+      - name: Candidate health monitoring
+        if: ${{ steps.mode.outputs.release_mode == 'deploy' }}
+        shell: bash
+        run: |
+          echo "::group::Candidate health monitoring"
+          for attempt in $(seq 1 "${HEALTHCHECK_ATTEMPTS}"); do
+            echo "Health check ${attempt}/${HEALTHCHECK_ATTEMPTS}: ${{ steps.candidate.outputs.url }}"
+            curl -f --retry 2 --retry-delay 2 "${{ steps.candidate.outputs.url }}" >/dev/null
+            if [ "$attempt" -lt "${HEALTHCHECK_ATTEMPTS}" ]; then
+              sleep "${HEALTHCHECK_DELAY_SECONDS}"
+            fi
+          done
+          echo "Candidate health checks passed."
+          echo "::endgroup::"
+
+      - name: Promote validated candidate to live
+        if: ${{ steps.mode.outputs.release_mode == 'deploy' }}
+        run: |
+          firebase hosting:clone \
+            "${FIREBASE_SITE_ID}:${CANDIDATE_CHANNEL_ID}" \
+            "${FIREBASE_SITE_ID}:live" \
+            --project "${FIREBASE_PROJECT_ID}" \
+            --token "${{ secrets.FIREBASE_TOKEN }}"
+
+      - name: Manual rollback to specific version
+        if: ${{ steps.mode.outputs.release_mode == 'rollback' }}
+        shell: bash
+        run: |
+          echo "::group::Manual rollback to specific version"
+          echo "Rollback version: ${{ inputs.rollback_version }}"
+          echo "Reason: ${{ inputs.rollback_reason }}"
+          firebase hosting:clone \
+            "${FIREBASE_SITE_ID}:live" \
+            "${FIREBASE_SITE_ID}:${ROLLBACK_BACKUP_CHANNEL_ID}" \
+            --project "${FIREBASE_PROJECT_ID}" \
+            --token "${{ secrets.FIREBASE_TOKEN }}"
+          firebase hosting:clone \
+            "${FIREBASE_SITE_ID}:@${{ inputs.rollback_version }}" \
+            "${FIREBASE_SITE_ID}:live" \
+            --project "${FIREBASE_PROJECT_ID}" \
+            --token "${{ secrets.FIREBASE_TOKEN }}"
+          echo "::endgroup::"
+
+      - name: Production validation
+        id: production_validation
+        if: ${{ always() && steps.mode.outputs.release_mode != 'rollback' }}
+        continue-on-error: true
+        shell: bash
+        run: |
+          echo "::group::Production validation"
+          for attempt in $(seq 1 "${HEALTHCHECK_ATTEMPTS}"); do
+            echo "Production health check ${attempt}/${HEALTHCHECK_ATTEMPTS}: ${PRODUCTION_URL}"
+            curl -f --retry 2 --retry-delay 2 "${PRODUCTION_URL}" >/dev/null
+            if [ "$attempt" -lt "${HEALTHCHECK_ATTEMPTS}" ]; then
+              sleep "${HEALTHCHECK_DELAY_SECONDS}"
+            fi
+          done
+          echo "Production validation passed."
+          echo "::endgroup::"
+
+      - name: Auto rollback to saved previous live version
+        if: ${{ always() && steps.mode.outputs.release_mode == 'deploy' && steps.production_validation.outcome == 'failure' }}
+        shell: bash
+        run: |
+          echo "::group::Automatic rollback"
+          echo "Production validation failed. Restoring the saved previous live version from ${ROLLBACK_BACKUP_CHANNEL_ID}."
+          firebase hosting:clone \
+            "${FIREBASE_SITE_ID}:${ROLLBACK_BACKUP_CHANNEL_ID}" \
+            "${FIREBASE_SITE_ID}:live" \
+            --project "${FIREBASE_PROJECT_ID}" \
+            --token "${{ secrets.FIREBASE_TOKEN }}"
+          echo "Auto rollback completed."
+          echo "::endgroup::"
+
+      - name: Release summary
+        if: ${{ always() }}
+        shell: bash
+        run: |
+          echo "::group::CD release summary"
+          echo "=== CD Release Summary ==="
+          echo "Mode: ${{ steps.mode.outputs.release_mode }}"
+          echo "Saved live backup channel: ${ROLLBACK_BACKUP_CHANNEL_ID}"
+          if [ "${{ steps.mode.outputs.release_mode }}" = "deploy" ]; then
+            echo "Candidate channel: ${CANDIDATE_CHANNEL_ID}"
+            echo "Candidate URL: ${{ steps.candidate.outputs.url }}"
+            echo "Production validation outcome: ${{ steps.production_validation.outcome }}"
+          else
+            echo "Rollback version: ${{ inputs.rollback_version }}"
+            echo "Rollback reason: ${{ inputs.rollback_reason }}"
+          fi
+          echo "::endgroup::"
+
+          {
+            echo ""
+            echo "### Deployment state"
+            echo "- Saved live backup channel: \`${ROLLBACK_BACKUP_CHANNEL_ID}\`"
+            if [ "${{ steps.mode.outputs.release_mode }}" = "deploy" ]; then
+              echo "- Candidate channel: \`${CANDIDATE_CHANNEL_ID}\`"
+              echo "- Candidate URL: ${{ steps.candidate.outputs.url }}"
+              echo "- Production validation outcome: ${{ steps.production_validation.outcome }}"
+              if [ "${{ steps.production_validation.outcome }}" = "failure" ]; then
+                echo "- Auto rollback: executed from saved backup channel"
+              else
+                echo "- Auto rollback: not needed"
+              fi
+            else
+              echo "- Manual rollback version: \`${{ inputs.rollback_version }}\`"
+              echo "- Manual rollback reason: ${{ inputs.rollback_reason }}"
+            fi
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Fail workflow if production validation failed after rollback
+        if: ${{ always() && steps.mode.outputs.release_mode == 'deploy' && steps.production_validation.outcome == 'failure' }}
+        shell: bash
+        run: |
+          echo "Production validation failed and the workflow executed an automatic rollback."
+          exit 1

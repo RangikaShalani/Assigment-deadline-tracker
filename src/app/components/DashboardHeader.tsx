@@ -33,44 +33,10 @@ export function DashboardHeader({
             <h1 className="text-2xl font-bold text-gray-900">Assignment Tracker</h1>
             <p className="text-sm text-gray-600 mt-1">Stay on top of your deadlines</p>
           </div>
-          
+
           {/* Controls */}
           <div className="flex flex-wrap items-center gap-3">
-            {/* Add Assignment Button */}
-            <Button
-              onClick={onAddAssignment}
-              className="bg-blue-600 hover:bg-blue-700 text-white"
-            >
-              <Plus className="w-4 h-4 mr-2" />
-              Add Assignment
-            </Button>
 
-            {/* View Mode Toggle */}
-            <div className="flex bg-gray-100 rounded-lg p-1">
-              <button
-                onClick={() => onViewModeChange('list')}
-                className={`flex items-center gap-2 px-3 py-2 rounded-md text-sm font-medium transition-all ${
-                  viewMode === 'list' 
-                    ? 'bg-white text-gray-900 shadow-sm' 
-                    : 'text-gray-600 hover:text-gray-900'
-                }`}
-              >
-                <LayoutList className="w-4 h-4" />
-                List
-              </button>
-              <button
-                onClick={() => onViewModeChange('calendar')}
-                className={`flex items-center gap-2 px-3 py-2 rounded-md text-sm font-medium transition-all ${
-                  viewMode === 'calendar' 
-                    ? 'bg-white text-gray-900 shadow-sm' 
-                    : 'text-gray-600 hover:text-gray-900'
-                }`}
-              >
-                <CalendarDays className="w-4 h-4" />
-                Calendar
-              </button>
-            </div>
-            
             {/* Sort By - Only show in list view */}
             {viewMode === 'list' && (
               <Select value={sortBy} onValueChange={(value) => onSortByChange(value as SortBy)}>
@@ -84,7 +50,7 @@ export function DashboardHeader({
                 </SelectContent>
               </Select>
             )}
-            
+
             {/* Filter By Status */}
             <Select value={filterBy} onValueChange={(value) => onFilterByChange(value as FilterBy)}>
               <SelectTrigger className="w-[160px]">
@@ -96,7 +62,7 @@ export function DashboardHeader({
                 <SelectItem value="completed">Completed</SelectItem>
               </SelectContent>
             </Select>
-            
+
             {/* Filters Button */}
             <Button
               onClick={onToggleFilters}
@@ -104,6 +70,39 @@ export function DashboardHeader({
               size="icon"
             >
               <SlidersHorizontal className="w-4 h-4" />
+            </Button>
+
+            {/* View Mode Toggle */}
+            <div className="flex bg-gray-100 rounded-lg p-1">
+              <button
+                onClick={() => onViewModeChange('list')}
+                className={`flex items-center gap-2 px-3 py-2 rounded-md text-sm font-medium transition-all ${viewMode === 'list'
+                  ? 'bg-white text-gray-900 shadow-sm'
+                  : 'text-gray-600 hover:text-gray-900'
+                  }`}
+              >
+                <LayoutList className="w-4 h-4" />
+                List
+              </button>
+              <button
+                onClick={() => onViewModeChange('calendar')}
+                className={`flex items-center gap-2 px-3 py-2 rounded-md text-sm font-medium transition-all ${viewMode === 'calendar'
+                  ? 'bg-white text-gray-900 shadow-sm'
+                  : 'text-gray-600 hover:text-gray-900'
+                  }`}
+              >
+                <CalendarDays className="w-4 h-4" />
+                Calendar
+              </button>
+            </div>
+
+            {/* Add Assignment Button */}
+            <Button
+              onClick={onAddAssignment}
+              className="bg-blue-600 hover:bg-blue-700 text-white"
+            >
+              <Plus className="w-4 h-4 mr-2" />
+              Add Assignment
             </Button>
           </div>
         </div>

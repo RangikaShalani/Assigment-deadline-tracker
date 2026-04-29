@@ -29,12 +29,14 @@ export function AssignmentList({ assignments, sortBy, onAssignmentClick, onToggl
         break;
       case 'dueDate':
       default:
-        // Group by week
-        const daysRemaining = assignment.daysRemaining;
-        if (daysRemaining < 0) key = 'Overdue';
-        else if (daysRemaining <= 7) key = 'This Week';
-        else if (daysRemaining <= 14) key = 'Next Week';
-        else key = 'Later';
+        {
+          // Group by week
+          const daysRemaining = assignment.daysRemaining;
+          if (daysRemaining < 0) key = 'Overdue';
+          else if (daysRemaining <= 7) key = 'This Week';
+          else if (daysRemaining <= 14) key = 'Next Week';
+          else key = 'Later';
+        }
         break;
     }
     

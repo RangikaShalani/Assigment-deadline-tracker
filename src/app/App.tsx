@@ -43,7 +43,6 @@ function App() {
 
   useEffect(() => {
     if (!isFirebaseConfigured) {
-      setIsLoading(false);
       return;
     }
 
@@ -234,12 +233,9 @@ function App() {
         viewMode={viewMode}
         sortBy={sortBy}
         filterBy={filterBy}
-        selectedCourses={selectedCourses}
-        availableCourses={availableCourses}
         onViewModeChange={setViewMode}
         onSortByChange={setSortBy}
         onFilterByChange={setFilterBy}
-        onCourseFilterChange={setSelectedCourses}
         onToggleFilters={() => setShowFilters(true)}
         onAddAssignment={() => setShowAddDialog(true)}
       />

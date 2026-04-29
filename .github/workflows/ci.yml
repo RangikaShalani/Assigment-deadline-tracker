@@ -22,17 +22,165 @@ jobs:
       - name: Install dependencies
         run: npm install
 
+      - name: Prepare CI logs
+        run: mkdir -p ci-logs
+
       - name: Lint check
-        run: npm run lint
+        id: lint
+        shell: bash
+        run: |
+          set +e
+          npm run lint 2>&1 | tee ci-logs/lint.log
+          status=${PIPESTATUS[0]}
+          echo "exit_code=$status" >> "$GITHUB_OUTPUT"
+          if [ "$status" -eq 0 ]; then
+            echo "result=PASS" >> "$GITHUB_OUTPUT"
+          else
+            echo "result=FAIL" >> "$GITHUB_OUTPUT"
+          fi
+          exit 0
+
+      - name: Lint failure details
+        if: ${{ always() && steps.lint.outputs.exit_code != '0' }}
+        shell: bash
+        run: |
+          echo "::group::Lint failure details"
+          echo "Lint failed with exit code ${{ steps.lint.outputs.exit_code }}"
+          echo "Last 80 lines from ci-logs/lint.log:"
+          tail -n 80 ci-logs/lint.log
+          echo "::endgroup::"
 
       - name: Run tests
-        run: npm test
+        id: tests
+        shell: bash
+        run: |
+          set +e
+          npm test 2>&1 | tee ci-logs/test.log
+          status=${PIPESTATUS[0]}
+          echo "exit_code=$status" >> "$GITHUB_OUTPUT"
+          if [ "$status" -eq 0 ]; then
+            echo "result=PASS" >> "$GITHUB_OUTPUT"
+          else
+            echo "result=FAIL" >> "$GITHUB_OUTPUT"
+          fi
+          exit 0
+
+      - name: Test failure details
+        if: ${{ always() && steps.tests.outputs.exit_code != '0' }}
+        shell: bash
+        run: |
+          echo "::group::Test failure details"
+          echo "Tests failed with exit code ${{ steps.tests.outputs.exit_code }}"
+          echo "Last 80 lines from ci-logs/test.log:"
+          tail -n 80 ci-logs/test.log
+          echo "::endgroup::"
 
       - name: Build project (Vite)
-        run: npm run build
+        id: build
+        shell: bash
+        run: |
+          set +e
+          npm run build 2>&1 | tee ci-logs/build.log
+          status=${PIPESTATUS[0]}
+          echo "exit_code=$status" >> "$GITHUB_OUTPUT"
+          if [ "$status" -eq 0 ]; then
+            echo "result=PASS" >> "$GITHUB_OUTPUT"
+          else
+            echo "result=FAIL" >> "$GITHUB_OUTPUT"
+          fi
+          exit 0
+
+      - name: Build failure details
+        if: ${{ always() && steps.build.outputs.exit_code != '0' }}
+        shell: bash
+        run: |
+          echo "::group::Build failure details"
+          echo "Build failed with exit code ${{ steps.build.outputs.exit_code }}"
+          echo "Last 80 lines from ci-logs/build.log:"
+          tail -n 80 ci-logs/build.log
+          echo "::endgroup::"
 
       - name: Security audit
-        run: npm audit --audit-level=high
+        id: security
+        shell: bash
+        run: |
+          set +e
+          npm audit --audit-level=high 2>&1 | tee ci-logs/security.log
+          status=${PIPESTATUS[0]}
+          echo "exit_code=$status" >> "$GITHUB_OUTPUT"
+          if [ "$status" -eq 0 ]; then
+            echo "result=PASS" >> "$GITHUB_OUTPUT"
+          else
+            echo "result=FAIL" >> "$GITHUB_OUTPUT"
+          fi
+          exit 0
+
+      - name: Security failure details
+        if: ${{ always() && steps.security.outputs.exit_code != '0' }}
+        shell: bash
+        run: |
+          echo "::group::Security audit failure details"
+          echo "Security audit failed with exit code ${{ steps.security.outputs.exit_code }}"
+          echo "Last 80 lines from ci-logs/security.log:"
+          tail -n 80 ci-logs/security.log
+          echo "::endgroup::"
+
+      - name: CI build summary
+        if: ${{ always() }}
+        shell: bash
+        run: |
+          echo "::group::CI build summary"
+          echo "=== CI Build Summary ==="
+          echo "Lint result: ${{ steps.lint.outputs.result }}"
+          echo "Lint exit code: ${{ steps.lint.outputs.exit_code }}"
+          echo "Build result: ${{ steps.build.outputs.result }}"
+          echo "Build exit code: ${{ steps.build.outputs.exit_code }}"
+          echo "::endgroup::"
+
+          echo "::group::CI test summary"
+          echo "=== CI Test Summary ==="
+          echo "Test result: ${{ steps.tests.outputs.result }}"
+          echo "Test exit code: ${{ steps.tests.outputs.exit_code }}"
+          echo "Log file: ci-logs/test.log"
+          echo "::endgroup::"
+
+          echo "::group::CI security summary"
+          echo "=== CI Security Summary ==="
+          echo "Security audit result: ${{ steps.security.outputs.result }}"
+          echo "Security exit code: ${{ steps.security.outputs.exit_code }}"
+          echo "Log file: ci-logs/security.log"
+          echo "::endgroup::"
+
+          {
+            echo "## CI Pipeline Summary"
+            echo ""
+            echo "| Gate | Result | Exit Code |"
+            echo "| --- | --- | --- |"
+            echo "| Lint | ${{ steps.lint.outputs.result }} | ${{ steps.lint.outputs.exit_code }} |"
+            echo "| Tests | ${{ steps.tests.outputs.result }} | ${{ steps.tests.outputs.exit_code }} |"
+            echo "| Build | ${{ steps.build.outputs.result }} | ${{ steps.build.outputs.exit_code }} |"
+            echo "| Security audit | ${{ steps.security.outputs.result }} | ${{ steps.security.outputs.exit_code }} |"
+            echo ""
+            echo "### Logs"
+            echo "- Lint log: \`ci-logs/lint.log\`"
+            echo "- Test log: \`ci-logs/test.log\`"
+            echo "- Build log: \`ci-logs/build.log\`"
+            echo "- Security log: \`ci-logs/security.log\`"
+            echo ""
+            if [ "${{ steps.lint.outputs.exit_code }}" != "0" ] || [ "${{ steps.tests.outputs.exit_code }}" != "0" ] || [ "${{ steps.build.outputs.exit_code }}" != "0" ] || [ "${{ steps.security.outputs.exit_code }}" != "0" ]; then
+              echo "### Failure details"
+              echo "- Check the grouped log sections above for the last 80 lines of the failed step output."
+            fi
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Fail workflow if quality gates failed
+        if: ${{ always() }}
+        shell: bash
+        run: |
+          if [ "${{ steps.lint.outputs.exit_code }}" != "0" ] || [ "${{ steps.tests.outputs.exit_code }}" != "0" ] || [ "${{ steps.build.outputs.exit_code }}" != "0" ] || [ "${{ steps.security.outputs.exit_code }}" != "0" ]; then
+            echo "One or more CI quality gates failed."
+            exit 1
+          fi
 
       - name: Upload build artifact
         if: ${{ success() }}

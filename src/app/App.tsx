@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { mockAssignments } from './data/mockAssignments';
 import { Assignment, AssignmentWithPriority, ViewMode, SortBy, FilterBy } from './types/assignment';
 import { enrichAssignments } from './utils/assignmentUtils';
@@ -14,10 +14,24 @@ import { AssignmentDetailsDialog } from './components/AssignmentDetailsDialog';
 import { AddAssignmentDialog } from './components/AddAssignmentDialog';
 import { EmptyState } from './components/EmptyState';
 import { Toaster, toast } from 'sonner';
+import { isFirebaseConfigured } from './lib/firebase';
+import {
+  createAssignment,
+  subscribeToAssignments,
+  updateAssignmentCompletion
+} from './services/assignmentService';
 
 function App() {
   // State management
-  const [assignments, setAssignments] = useState<Assignment[]>(mockAssignments);
+  const [assignments, setAssignments] = useState<Assignment[]>(
+    isFirebaseConfigured ? [] : mockAssignments
+  );
+  const [isLoading, setIsLoading] = useState(isFirebaseConfigured);
+  const [databaseError, setDatabaseError] = useState<string | null>(
+    isFirebaseConfigured
+      ? null
+      : 'Firebase is not configured yet. The app is currently using local mock assignments.'
+  );
   const [viewMode, setViewMode] = useState<ViewMode>('list');
   const [sortBy, setSortBy] = useState<SortBy>('dueDate');
   const [filterBy, setFilterBy] = useState<FilterBy>('incomplete');
@@ -26,6 +40,30 @@ function App() {
   const [showFilters, setShowFilters] = useState(false);
   const [selectedAssignment, setSelectedAssignment] = useState<AssignmentWithPriority | null>(null);
   const [showAddDialog, setShowAddDialog] = useState(false);
+
+  useEffect(() => {
+    if (!isFirebaseConfigured) {
+      return;
+    }
+
+    const unsubscribe = subscribeToAssignments(
+      (nextAssignments) => {
+        setAssignments(nextAssignments);
+        setDatabaseError(null);
+        setIsLoading(false);
+      },
+      (error) => {
+        console.error(error);
+        setDatabaseError('Could not sync assignments from Firebase. Check your config and Firestore rules.');
+        setIsLoading(false);
+        toast.error('Firebase sync failed', {
+          description: error.message
+        });
+      }
+    );
+
+    return unsubscribe;
+  }, []);
   
   // Get available courses
   const availableCourses = useMemo(() => {
@@ -91,23 +129,48 @@ function App() {
   }, [enrichedAssignments]);
   
   // Handlers
-  const toggleComplete = (id: string) => {
-    setAssignments(prev => 
-      prev.map(assignment => 
-        assignment.id === id 
-          ? { ...assignment, completed: !assignment.completed }
+  const toggleComplete = async (id: string) => {
+    const currentAssignment = assignments.find(a => a.id === id);
+    if (!currentAssignment) {
+      return;
+    }
+
+    const nextCompleted = !currentAssignment.completed;
+
+    setAssignments(prev =>
+      prev.map(assignment =>
+        assignment.id === id
+          ? { ...assignment, completed: nextCompleted }
           : assignment
       )
     );
-    
-    const assignment = assignments.find(a => a.id === id);
-    if (assignment) {
+
+    try {
+      if (isFirebaseConfigured) {
+        await updateAssignmentCompletion(
+          currentAssignment.firestoreId || currentAssignment.id,
+          nextCompleted
+        );
+      }
+
       toast.success(
-        assignment.completed ? 'Assignment marked as incomplete' : 'Assignment completed!',
+        currentAssignment.completed ? 'Assignment marked as incomplete' : 'Assignment completed!',
         {
-          description: assignment.title
+          description: currentAssignment.title
         }
       );
+    } catch (error) {
+      console.error(error);
+      setAssignments(prev =>
+        prev.map(assignment =>
+          assignment.id === id
+            ? { ...assignment, completed: currentAssignment.completed }
+            : assignment
+        )
+      );
+      toast.error('Could not update assignment', {
+        description: error instanceof Error ? error.message : 'Please try again.'
+      });
     }
   };
   
@@ -136,9 +199,9 @@ function App() {
     setSelectedAssignment(assignment);
   };
   
-  const handleToggleCompleteFromDialog = () => {
+  const handleToggleCompleteFromDialog = async () => {
     if (selectedAssignment) {
-      toggleComplete(selectedAssignment.id);
+      await toggleComplete(selectedAssignment.id);
       // Update the selected assignment to reflect the change
       const updated = assignments.find(a => a.id === selectedAssignment.id);
       if (updated) {
@@ -148,8 +211,13 @@ function App() {
     }
   };
 
-  const handleAddAssignment = (newAssignment: Assignment) => {
-    setAssignments(prev => [...prev, newAssignment]);
+  const handleAddAssignment = async (newAssignment: Assignment) => {
+    if (isFirebaseConfigured) {
+      await createAssignment(newAssignment);
+    } else {
+      setAssignments(prev => [...prev, newAssignment]);
+    }
+
     toast.success('Assignment added successfully!', {
       description: newAssignment.title
     });
@@ -165,18 +233,25 @@ function App() {
         viewMode={viewMode}
         sortBy={sortBy}
         filterBy={filterBy}
-        selectedCourses={selectedCourses}
-        availableCourses={availableCourses}
         onViewModeChange={setViewMode}
         onSortByChange={setSortBy}
         onFilterByChange={setFilterBy}
-        onCourseFilterChange={setSelectedCourses}
         onToggleFilters={() => setShowFilters(true)}
         onAddAssignment={() => setShowAddDialog(true)}
       />
       
       <main className="max-w-7xl mx-auto px-6 py-8">
-        {hasNoAssignments ? (
+        {databaseError && (
+          <div className="mb-6 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
+            {databaseError}
+          </div>
+        )}
+
+        {isLoading ? (
+          <div className="rounded-lg border border-gray-200 bg-white px-6 py-10 text-center text-gray-600">
+            Loading assignments from Firebase...
+          </div>
+        ) : hasNoAssignments ? (
           <EmptyState type="no-assignments" />
         ) : allCompleted ? (
           <EmptyState type="all-completed" />

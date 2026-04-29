@@ -5,7 +5,7 @@ import { Assignment } from '../types/assignment';
 interface AddAssignmentDialogProps {
   open: boolean;
   onClose: () => void;
-  onAddAssignment: (assignment: Assignment) => void;
+  onAddAssignment: (assignment: Assignment) => Promise<void> | void;
   availableCourses: { id: string; name: string; color: string }[];
 }
 
@@ -27,6 +27,7 @@ export function AddAssignmentDialog({
   });
 
   const [errors, setErrors] = useState<Record<string, string>>({});
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
   if (!open) return null;
 
@@ -81,7 +82,7 @@ export function AddAssignmentDialog({
     return Object.keys(newErrors).length === 0;
   };
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
     if (!validateForm()) {
@@ -102,8 +103,18 @@ export function AddAssignmentDialog({
       description: formData.description || undefined
     };
 
-    onAddAssignment(newAssignment);
-    handleClose();
+    try {
+      setIsSubmitting(true);
+      await onAddAssignment(newAssignment);
+      handleClose();
+    } catch (error) {
+      setErrors(prev => ({
+        ...prev,
+        submit: error instanceof Error ? error.message : 'Could not save the assignment.'
+      }));
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   const handleClose = () => {
@@ -118,6 +129,7 @@ export function AddAssignmentDialog({
       isNewCourse: false
     });
     setErrors({});
+    setIsSubmitting(false);
     onClose();
   };
 
@@ -254,20 +266,28 @@ export function AddAssignmentDialog({
             />
           </div>
 
+          {errors.submit && (
+            <div className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
+              {errors.submit}
+            </div>
+          )}
+
           {/* Actions */}
           <div className="flex justify-end gap-3 pt-4 border-t">
             <button
               type="button"
               onClick={handleClose}
+              disabled={isSubmitting}
               className="px-4 py-2 text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
             >
               Cancel
             </button>
             <button
               type="submit"
+              disabled={isSubmitting}
               className="px-4 py-2 text-white bg-blue-600 rounded-lg hover:bg-blue-700 transition-colors"
             >
-              Add Assignment
+              {isSubmitting ? 'Saving...' : 'Add Assignment'}
             </button>
           </div>
         </form>

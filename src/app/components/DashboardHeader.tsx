@@ -7,12 +7,9 @@ interface DashboardHeaderProps {
   viewMode: ViewMode;
   sortBy: SortBy;
   filterBy: FilterBy;
-  selectedCourses: string[];
-  availableCourses: { id: string; name: string; color: string }[];
   onViewModeChange: (mode: ViewMode) => void;
   onSortByChange: (sort: SortBy) => void;
   onFilterByChange: (filter: FilterBy) => void;
-  onCourseFilterChange: (courses: string[]) => void;
   onToggleFilters: () => void;
   onAddAssignment: () => void;
 }
@@ -21,12 +18,9 @@ export function DashboardHeader({
   viewMode,
   sortBy,
   filterBy,
-  selectedCourses,
-  availableCourses,
   onViewModeChange,
   onSortByChange,
   onFilterByChange,
-  onCourseFilterChange,
   onToggleFilters,
   onAddAssignment
 }: DashboardHeaderProps) {

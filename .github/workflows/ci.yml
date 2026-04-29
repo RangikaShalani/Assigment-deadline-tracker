@@ -201,7 +201,7 @@ jobs:
           path: dist
 
       - name: Install Playwright browser
-        run: npx playwright@1.52.0 install --with-deps chromium
+        run: npx playwright install --with-deps chromium
 
       - name: Run staging E2E smoke test
         shell: bash
@@ -215,7 +215,7 @@ jobs:
             fi
             sleep 2
           done
-          npx playwright@1.52.0 test e2e/staging-smoke.spec.ts --config=playwright.config.ts 2>&1 | tee ci-logs/staging-e2e.log
+          npx playwright test --config=playwright.config.ts 2>&1 | tee ci-logs/staging-e2e.log
 
       - name: Staging E2E summary
         if: ${{ always() }}
@@ -265,7 +265,7 @@ jobs:
         run: |
           set -o pipefail
           mkdir -p ci-logs
-          npx @lhci/cli@0.15.1 autorun --config=.lighthouserc.json 2>&1 | tee ci-logs/lighthouse.log
+          npm run test:lighthouse 2>&1 | tee ci-logs/lighthouse.log
 
       - name: Lighthouse summary
         if: ${{ always() }}

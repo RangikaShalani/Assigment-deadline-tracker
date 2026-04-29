@@ -1,19 +1,19 @@
-name: CD — Deploy to Firebase (Blue-Green)
+name: CD - Deploy to Firebase (Blue-Green)
 
 on:
-  push:
-    branches: [staging]
-  pull_request:
-    branches: [staging]
   workflow_run:
-    workflows: ["CI"]
+    workflows: ["CI Pipeline"]
     types: [completed]
+    branches: [staging]
+
+permissions:
+  actions: read
+  contents: read
 
 jobs:
   deploy:
     runs-on: ubuntu-latest
-
-    if: ${{ github.event.workflow_run.conclusion == 'success' || github.event_name != 'workflow_run' }}
+    if: ${{ github.event.workflow_run.conclusion == 'success' && (github.event.workflow_run.event == 'push' || github.event.workflow_run.event == 'pull_request') }}
 
     steps:
       - name: Checkout code
@@ -24,6 +24,8 @@ jobs:
         with:
           name: release-${{ github.event.workflow_run.head_sha }}
           path: dist/
+          run-id: ${{ github.event.workflow_run.id }}
+          github-token: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Install Firebase CLI
         run: npm install -g firebase-tools
@@ -41,9 +43,3 @@ jobs:
         run: |
           firebase deploy --only hosting \
           --token "${{ secrets.FIREBASE_TOKEN }}"
-
-
-
-
-
-          

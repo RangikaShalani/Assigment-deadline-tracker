@@ -2,9 +2,9 @@ name: CI Pipeline
 
 on:
   push:
-    branches: [dev,staging, feature/*]
+    branches: [dev, staging, feature/*]
   pull_request:
-    branches: [staging,main]
+    branches: [staging, main]
 
 jobs:
   build-test:
@@ -12,10 +12,10 @@ jobs:
 
     steps:
       - name: Checkout code
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
 
       - name: Setup Node
-        uses: actions/setup-node@v3
+        uses: actions/setup-node@v4
         with:
           node-version: 18
 
@@ -33,3 +33,10 @@ jobs:
 
       - name: Security audit
         run: npm audit --audit-level=high
+
+      - name: Upload build artifact
+        if: ${{ success() }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: release-${{ github.sha }}
+          path: dist

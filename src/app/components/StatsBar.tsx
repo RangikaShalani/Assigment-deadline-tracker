@@ -1,6 +1,5 @@
 import { AssignmentWithPriority } from '../types/assignment';
 import { AlertCircle, CheckCircle2, Clock, TrendingUp } from 'lucide-react';
-import { motion } from 'motion/react';
 
 interface StatsBarProps {
   assignments: AssignmentWithPriority[];
@@ -64,11 +63,8 @@ export function StatsBar({ assignments }: StatsBarProps) {
   return (
     <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4 mb-8">
       {stats.map((stat, index) => (
-        <motion.div
+        <div
           key={stat.label}
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: index * 0.1 }}
           className="bg-white rounded-lg border shadow-sm p-4"
         >
           <div className="flex items-center gap-3">
@@ -80,7 +76,7 @@ export function StatsBar({ assignments }: StatsBarProps) {
               <p className="text-xs text-gray-600">{stat.label}</p>
             </div>
           </div>
-        </motion.div>
+        </div>
       ))}
     </div>
   );

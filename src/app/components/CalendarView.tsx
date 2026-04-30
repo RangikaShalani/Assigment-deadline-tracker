@@ -3,7 +3,6 @@ import { AssignmentWithPriority } from '../types/assignment';
 import { format, startOfMonth, endOfMonth, eachDayOfInterval, isSameDay, isToday, startOfWeek, endOfWeek } from 'date-fns';
 import { ChevronLeft, ChevronRight } from 'lucide-react';
 import { getPriorityColor } from '../utils/assignmentUtils';
-import { motion } from 'motion/react';
 
 interface CalendarViewProps {
   assignments: AssignmentWithPriority[];
@@ -90,11 +89,10 @@ export function CalendarView({ assignments, onAssignmentClick }: CalendarViewPro
               
               <div className="space-y-1">
                 {dayAssignments.slice(0, 2).map(assignment => (
-                  <motion.div
+                  <button
                     key={assignment.id}
-                    whileHover={{ scale: 1.05 }}
                     onClick={() => onAssignmentClick(assignment)}
-                    className={`text-xs p-1 rounded cursor-pointer ${getPriorityColor(assignment.priorityLevel)} bg-opacity-20 hover:bg-opacity-30 transition-all`}
+                    className={`block w-full text-left text-xs p-1 rounded cursor-pointer ${getPriorityColor(assignment.priorityLevel)} bg-opacity-20 hover:bg-opacity-30 transition-colors`}
                     style={{ 
                       borderLeft: `3px solid ${assignment.courseColor}`,
                       backgroundColor: `${assignment.courseColor}20`
@@ -103,7 +101,7 @@ export function CalendarView({ assignments, onAssignmentClick }: CalendarViewPro
                     <div className="font-medium truncate" style={{ color: assignment.courseColor }}>
                       {assignment.title}
                     </div>
-                  </motion.div>
+                  </button>
                 ))}
                 {dayAssignments.length > 2 && (
                   <div className="text-xs text-gray-600 pl-1">

@@ -3,12 +3,12 @@ import { mockAssignments } from './data/mockAssignments';
 import { Assignment, AssignmentWithPriority, ViewMode, SortBy, FilterBy } from './types/assignment';
 import { enrichAssignments } from './utils/assignmentUtils';
 import { DashboardHeader } from './components/DashboardHeader';
+import { StatsBar } from './components/StatsBar';
+import { PrioritySection } from './components/PrioritySection';
 import { AssignmentList } from './components/AssignmentList';
 import { EmptyState } from './components/EmptyState';
 import { Toaster, toast } from 'sonner';
 
-const StatsBar = lazy(() => import('./components/StatsBar').then((module) => ({ default: module.StatsBar })));
-const PrioritySection = lazy(() => import('./components/PrioritySection').then((module) => ({ default: module.PrioritySection })));
 const CalendarView = lazy(() => import('./components/CalendarView').then((module) => ({ default: module.CalendarView })));
 const WorkloadChart = lazy(() => import('./components/WorkloadChart').then((module) => ({ default: module.WorkloadChart })));
 const WeeklyBreakdown = lazy(() => import('./components/WeeklyBreakdown').then((module) => ({ default: module.WeeklyBreakdown })));
@@ -33,6 +33,15 @@ function SectionFallback() {
   );
 }
 
+function ChartSectionFallback() {
+  return (
+    <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mt-8">
+      <div className="rounded-lg border border-gray-200 bg-white p-6 min-h-[360px]" />
+      <div className="rounded-lg border border-gray-200 bg-white p-6 min-h-[360px]" />
+    </div>
+  );
+}
+
 function App() {
   // State management
   const [assignments, setAssignments] = useState<Assignment[]>(
@@ -52,6 +61,7 @@ function App() {
   const [showFilters, setShowFilters] = useState(false);
   const [selectedAssignment, setSelectedAssignment] = useState<AssignmentWithPriority | null>(null);
   const [showAddDialog, setShowAddDialog] = useState(false);
+  const [showInsights, setShowInsights] = useState(false);
 
   useEffect(() => {
     if (!isFirebaseConfigured) {
@@ -95,6 +105,18 @@ function App() {
       cancelled = true;
       unsubscribe();
     };
+  }, []);
+
+  useEffect(() => {
+    const scheduleInsights = () => setShowInsights(true);
+
+    if (typeof window !== 'undefined' && 'requestIdleCallback' in window) {
+      const idleId = window.requestIdleCallback(scheduleInsights, { timeout: 1500 });
+      return () => window.cancelIdleCallback(idleId);
+    }
+
+    const timeoutId = window.setTimeout(scheduleInsights, 800);
+    return () => window.clearTimeout(timeoutId);
   }, []);
   
   // Get available courses
@@ -292,19 +314,15 @@ function App() {
         ) : (
           <>
             {/* Stats Bar */}
-            <Suspense fallback={<SectionFallback />}>
-              <StatsBar assignments={enrichedAssignments} />
-            </Suspense>
+            <StatsBar assignments={enrichedAssignments} />
             
             {/* Priority Section - Only show in list view and if incomplete filter */}
             {viewMode === 'list' && filterBy !== 'completed' && priorityAssignments.length > 0 && (
-              <Suspense fallback={<SectionFallback />}>
-                <PrioritySection
-                  assignments={priorityAssignments}
-                  onAssignmentClick={handleAssignmentClick}
-                  onToggleComplete={toggleComplete}
-                />
-              </Suspense>
+              <PrioritySection
+                assignments={priorityAssignments}
+                onAssignmentClick={handleAssignmentClick}
+                onToggleComplete={toggleComplete}
+              />
             )}
             
             {/* Main Content */}
@@ -332,12 +350,16 @@ function App() {
             
             {/* Data Visualization */}
             {filterBy !== 'completed' && (
-              <Suspense fallback={<SectionFallback />}>
-                <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mt-8">
-                  <WorkloadChart assignments={enrichedAssignments} />
-                  <WeeklyBreakdown assignments={enrichedAssignments} />
-                </div>
-              </Suspense>
+              showInsights ? (
+                <Suspense fallback={<ChartSectionFallback />}>
+                  <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mt-8">
+                    <WorkloadChart assignments={enrichedAssignments} />
+                    <WeeklyBreakdown assignments={enrichedAssignments} />
+                  </div>
+                </Suspense>
+              ) : (
+                <ChartSectionFallback />
+              )
             )}
           </>
         )}

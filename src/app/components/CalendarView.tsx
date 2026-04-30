@@ -44,12 +44,14 @@ export function CalendarView({ assignments, onAssignmentClick }: CalendarViewPro
         <div className="flex gap-2">
           <button
             onClick={goToPreviousMonth}
+            aria-label="Go to previous month"
             className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
           >
             <ChevronLeft className="w-5 h-5" />
           </button>
           <button
             onClick={goToNextMonth}
+            aria-label="Go to next month"
             className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
           >
             <ChevronRight className="w-5 h-5" />

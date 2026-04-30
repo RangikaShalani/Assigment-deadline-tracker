@@ -64,7 +64,7 @@ function App() {
 
     return unsubscribe;
   }, []);
-  
+
   // Get available courses
   const availableCourses = useMemo(() => {
     const coursesMap = new Map<string, { id: string; name: string; color: string }>();
@@ -79,33 +79,33 @@ function App() {
     });
     return Array.from(coursesMap.values()).sort((a, b) => a.name.localeCompare(b.name));
   }, [assignments]);
-  
+
   // Enrich assignments with calculated fields
   const enrichedAssignments = useMemo(() => {
     return enrichAssignments(assignments);
   }, [assignments]);
-  
+
   // Filter and sort assignments
   const filteredAssignments = useMemo(() => {
     let filtered = enrichedAssignments;
-    
+
     // Filter by completion status
     if (filterBy === 'incomplete') {
       filtered = filtered.filter(a => !a.completed);
     } else if (filterBy === 'completed') {
       filtered = filtered.filter(a => a.completed);
     }
-    
+
     // Filter by course
     if (selectedCourses.length > 0) {
       filtered = filtered.filter(a => selectedCourses.includes(a.courseId));
     }
-    
+
     // Filter by priority
     if (selectedPriorities.length > 0) {
       filtered = filtered.filter(a => selectedPriorities.includes(a.priorityLevel));
     }
-    
+
     // Sort
     return [...filtered].sort((a, b) => {
       switch (sortBy) {
@@ -119,7 +119,7 @@ function App() {
       }
     });
   }, [enrichedAssignments, filterBy, selectedCourses, selectedPriorities, sortBy]);
-  
+
   // Get priority assignments (top 3 high priority incomplete)
   const priorityAssignments = useMemo(() => {
     return enrichedAssignments
@@ -127,7 +127,7 @@ function App() {
       .sort((a, b) => b.priorityScore - a.priorityScore)
       .slice(0, 3);
   }, [enrichedAssignments]);
-  
+
   // Handlers
   const toggleComplete = async (id: string) => {
     const currentAssignment = assignments.find(a => a.id === id);
@@ -173,32 +173,32 @@ function App() {
       });
     }
   };
-  
+
   const handleCourseToggle = (courseId: string) => {
-    setSelectedCourses(prev => 
-      prev.includes(courseId) 
+    setSelectedCourses(prev =>
+      prev.includes(courseId)
         ? prev.filter(id => id !== courseId)
         : [...prev, courseId]
     );
   };
-  
+
   const handlePriorityToggle = (priority: string) => {
-    setSelectedPriorities(prev => 
+    setSelectedPriorities(prev =>
       prev.includes(priority)
         ? prev.filter(p => p !== priority)
         : [...prev, priority]
     );
   };
-  
+
   const clearAllFilters = () => {
     setSelectedCourses([]);
     setSelectedPriorities([]);
   };
-  
+
   const handleAssignmentClick = (assignment: AssignmentWithPriority) => {
     setSelectedAssignment(assignment);
   };
-  
+
   const handleToggleCompleteFromDialog = async () => {
     if (selectedAssignment) {
       await toggleComplete(selectedAssignment.id);
@@ -222,11 +222,11 @@ function App() {
       description: newAssignment.title
     });
   };
-  
+
   // Check if all assignments are completed
   const allCompleted = enrichedAssignments.length > 0 && enrichedAssignments.every(a => a.completed);
   const hasNoAssignments = assignments.length === 0;
-  
+
   return (
     <div className="min-h-screen bg-gray-50">
       <DashboardHeader
@@ -239,7 +239,8 @@ function App() {
         onToggleFilters={() => setShowFilters(true)}
         onAddAssignment={() => setShowAddDialog(true)}
       />
-      
+
+
       <main className="max-w-7xl mx-auto px-6 py-8">
         {databaseError && (
           <div className="mb-6 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
@@ -259,7 +260,7 @@ function App() {
           <>
             {/* Stats Bar */}
             <StatsBar assignments={enrichedAssignments} />
-            
+
             {/* Priority Section - Only show in list view and if incomplete filter */}
             {viewMode === 'list' && filterBy !== 'completed' && priorityAssignments.length > 0 && (
               <PrioritySection
@@ -268,13 +269,13 @@ function App() {
                 onToggleComplete={toggleComplete}
               />
             )}
-            
+
             {/* Main Content */}
             <div className="mb-8">
               <h2 className="text-xl font-semibold text-gray-900 mb-4">
                 {viewMode === 'list' ? 'All Assignments' : 'Calendar View'}
               </h2>
-              
+
               {viewMode === 'list' ? (
                 <AssignmentList
                   assignments={filteredAssignments}
@@ -289,7 +290,7 @@ function App() {
                 />
               )}
             </div>
-            
+
             {/* Data Visualization */}
             {filterBy !== 'completed' && (
               <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mt-8">
@@ -300,7 +301,7 @@ function App() {
           </>
         )}
       </main>
-      
+
       {/* Filter Panel */}
       <FilterPanel
         show={showFilters}
@@ -312,7 +313,7 @@ function App() {
         onClose={() => setShowFilters(false)}
         onClearAll={clearAllFilters}
       />
-      
+
       {/* Assignment Details Dialog */}
       <AssignmentDetailsDialog
         assignment={selectedAssignment}

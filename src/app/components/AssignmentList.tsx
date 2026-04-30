@@ -1,3 +1,4 @@
+import { useEffect, useState } from 'react';
 import { AssignmentWithPriority, SortBy } from '../types/assignment';
 import { AssignmentCard } from './AssignmentCard';
 import { EmptyState } from './EmptyState';
@@ -10,6 +11,22 @@ interface AssignmentListProps {
 }
 
 export function AssignmentList({ assignments, sortBy, onAssignmentClick, onToggleComplete }: AssignmentListProps) {
+  const [showAllAssignments, setShowAllAssignments] = useState(false);
+
+  useEffect(() => {
+    setShowAllAssignments(false);
+
+    const revealAssignments = () => setShowAllAssignments(true);
+
+    if (typeof window !== 'undefined' && 'requestIdleCallback' in window) {
+      const idleId = window.requestIdleCallback(revealAssignments, { timeout: 1200 });
+      return () => window.cancelIdleCallback(idleId);
+    }
+
+    const timeoutId = window.setTimeout(revealAssignments, 500);
+    return () => window.clearTimeout(timeoutId);
+  }, [assignments, sortBy]);
+
   if (assignments.length === 0) {
     return <EmptyState type="no-results" />;
   }
@@ -70,7 +87,7 @@ export function AssignmentList({ assignments, sortBy, onAssignmentClick, onToggl
             </span>
           </h3>
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-            {groupedAssignments[groupName].map(assignment => (
+            {(showAllAssignments ? groupedAssignments[groupName] : groupedAssignments[groupName].slice(0, 2)).map(assignment => (
               <AssignmentCard
                 key={assignment.id}
                 assignment={assignment}
@@ -79,6 +96,11 @@ export function AssignmentList({ assignments, sortBy, onAssignmentClick, onToggl
               />
             ))}
           </div>
+          {!showAllAssignments && groupedAssignments[groupName].length > 2 && (
+            <p className="mt-3 text-sm text-gray-500">
+              Loading more assignments...
+            </p>
+          )}
         </div>
       ))}
     </div>

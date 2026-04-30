@@ -26,12 +26,15 @@ export function AssignmentCard({ assignment, onClick, onToggleComplete }: Assign
         <div className="flex-1">
           {/* Course Badge */}
           <div 
-            className="inline-block px-3 py-1 rounded-full text-xs font-medium mb-2"
+            className="inline-flex items-center gap-2 px-3 py-1 rounded-full text-xs font-medium mb-2 text-gray-900 border border-gray-200"
             style={{ 
-              backgroundColor: `${assignment.courseColor}15`,
-              color: assignment.courseColor
+              backgroundColor: `${assignment.courseColor}12`
             }}
           >
+            <span
+              className="inline-block h-2.5 w-2.5 rounded-full"
+              style={{ backgroundColor: assignment.courseColor }}
+            />
             {assignment.courseName}
           </div>
           

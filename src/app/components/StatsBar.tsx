@@ -62,7 +62,7 @@ export function StatsBar({ assignments }: StatsBarProps) {
   
   return (
     <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4 mb-8">
-      {stats.map((stat, index) => (
+      {stats.map((stat) => (
         <div
           key={stat.label}
           className="bg-white rounded-lg border shadow-sm p-4"

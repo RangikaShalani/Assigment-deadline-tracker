@@ -68,6 +68,7 @@ export function DashboardHeader({
               onClick={onToggleFilters}
               variant="outline"
               size="icon"
+              aria-label="Open filters"
             >
               <SlidersHorizontal className="w-4 h-4" />
             </Button>
@@ -76,6 +77,8 @@ export function DashboardHeader({
             <div className="flex bg-gray-100 rounded-lg p-1">
               <button
                 onClick={() => onViewModeChange('list')}
+                aria-pressed={viewMode === 'list'}
+                aria-label="Switch to list view"
                 className={`flex items-center gap-2 px-3 py-2 rounded-md text-sm font-medium transition-all ${viewMode === 'list'
                   ? 'bg-white text-gray-900 shadow-sm'
                   : 'text-gray-600 hover:text-gray-900'
@@ -86,6 +89,8 @@ export function DashboardHeader({
               </button>
               <button
                 onClick={() => onViewModeChange('calendar')}
+                aria-pressed={viewMode === 'calendar'}
+                aria-label="Switch to calendar view"
                 className={`flex items-center gap-2 px-3 py-2 rounded-md text-sm font-medium transition-all ${viewMode === 'calendar'
                   ? 'bg-white text-gray-900 shadow-sm'
                   : 'text-gray-600 hover:text-gray-900'

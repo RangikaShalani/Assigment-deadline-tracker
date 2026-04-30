@@ -1,0 +1,74 @@
+name: Rollback - Firebase Hosting
+
+on:
+  workflow_run:
+    workflows: ["CI Pipeline"]
+    types: [completed]
+    branches: [staging]
+
+permissions:
+  actions: read
+  contents: read
+
+env:
+  FIREBASE_PROJECT_ID: assignment-deadline-trac-7bd75
+  FIREBASE_SITE_ID: assignment-deadline-trac-7bd75
+  ROLLBACK_BACKUP_CHANNEL_ID: rollback-backup
+  PRODUCTION_URL: https://assignment-deadline-trac-7bd75.web.app
+  HEALTHCHECK_ATTEMPTS: "6"
+  HEALTHCHECK_DELAY_SECONDS: "10"
+
+jobs:
+  rollback:
+    runs-on: ubuntu-latest
+    if: ${{ github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.head_branch == 'staging' && github.event.workflow_run.event == 'push' && github.event.workflow_run.head_commit.message == 'rollback' }}
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Rollback summary
+        shell: bash
+        run: |
+          {
+            echo "## Rollback Pipeline Trigger"
+            echo ""
+            echo "- Branch: staging"
+            echo "- Commit message: rollback"
+            echo "- Target: previous live version from \`${ROLLBACK_BACKUP_CHANNEL_ID}\`"
+            echo "- Normal CD pipeline is blocked for this commit message"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Install Firebase CLI
+        run: npm install -g firebase-tools
+
+      - name: Roll back to previous live version
+        shell: bash
+        run: |
+          firebase hosting:clone \
+            "${FIREBASE_SITE_ID}:${ROLLBACK_BACKUP_CHANNEL_ID}" \
+            "${FIREBASE_SITE_ID}:live" \
+            --project "${FIREBASE_PROJECT_ID}" \
+            --token "${{ secrets.FIREBASE_TOKEN }}"
+
+      - name: Validate rollback target
+        shell: bash
+        run: |
+          for attempt in $(seq 1 "${HEALTHCHECK_ATTEMPTS}"); do
+            echo "Rollback validation ${attempt}/${HEALTHCHECK_ATTEMPTS}: ${PRODUCTION_URL}"
+            curl -f --retry 2 --retry-delay 2 "${PRODUCTION_URL}" >/dev/null
+            if [ "$attempt" -lt "${HEALTHCHECK_ATTEMPTS}" ]; then
+              sleep "${HEALTHCHECK_DELAY_SECONDS}"
+            fi
+          done
+
+      - name: Rollback completion summary
+        if: ${{ always() }}
+        shell: bash
+        run: |
+          {
+            echo ""
+            echo "### Rollback result"
+            echo "- Result: ${{ job.status }}"
+            echo "- Restored source: \`${ROLLBACK_BACKUP_CHANNEL_ID}\`"
+          } >> "$GITHUB_STEP_SUMMARY"

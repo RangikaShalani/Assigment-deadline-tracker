@@ -1,7 +1,6 @@
 import { Calendar, Clock, TrendingUp, CheckCircle2, Circle, AlertCircle } from 'lucide-react';
 import { AssignmentWithPriority } from '../types/assignment';
 import { formatDaysRemaining, getPriorityBadgeColor, getPriorityColor } from '../utils/assignmentUtils';
-import { motion } from 'motion/react';
 import { format } from 'date-fns';
 
 interface AssignmentCardProps {
@@ -14,11 +13,7 @@ export function AssignmentCard({ assignment, onClick, onToggleComplete }: Assign
   const isOverdue = assignment.daysRemaining < 0;
   
   return (
-    <motion.div
-      initial={{ opacity: 0, y: 20 }}
-      animate={{ opacity: 1, y: 0 }}
-      whileHover={{ scale: 1.02 }}
-      transition={{ duration: 0.2 }}
+    <div
       className={`bg-white rounded-lg border shadow-sm p-5 cursor-pointer transition-all hover:shadow-md ${
         assignment.completed ? 'opacity-60' : ''
       }`}
@@ -52,6 +47,7 @@ export function AssignmentCard({ assignment, onClick, onToggleComplete }: Assign
             e.stopPropagation();
             onToggleComplete();
           }}
+          aria-label={assignment.completed ? `Mark ${assignment.title} as incomplete` : `Mark ${assignment.title} as complete`}
           className="ml-3 flex-shrink-0 text-gray-400 hover:text-green-600 transition-colors"
         >
           {assignment.completed ? (
@@ -91,6 +87,6 @@ export function AssignmentCard({ assignment, onClick, onToggleComplete }: Assign
           {assignment.priorityLevel.charAt(0).toUpperCase() + assignment.priorityLevel.slice(1)} Priority
         </span>
       </div>
-    </motion.div>
+    </div>
   );
 }

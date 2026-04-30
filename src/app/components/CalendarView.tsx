@@ -134,3 +134,4 @@ export function CalendarView({ assignments, onAssignmentClick }: CalendarViewPro
     </div>
   );
 }
+

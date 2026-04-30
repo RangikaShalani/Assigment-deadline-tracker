@@ -59,6 +59,7 @@ export function FilterPanel({
                 </div>
                 <button
                   onClick={onClose}
+                  aria-label="Close filters"
                   className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
                 >
                   <X className="w-5 h-5" />

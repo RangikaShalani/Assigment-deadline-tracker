@@ -1,25 +1,37 @@
-import { useEffect, useMemo, useState } from 'react';
+import { Suspense, lazy, useEffect, useMemo, useState } from 'react';
 import { mockAssignments } from './data/mockAssignments';
 import { Assignment, AssignmentWithPriority, ViewMode, SortBy, FilterBy } from './types/assignment';
 import { enrichAssignments } from './utils/assignmentUtils';
 import { DashboardHeader } from './components/DashboardHeader';
-import { StatsBar } from './components/StatsBar';
-import { PrioritySection } from './components/PrioritySection';
 import { AssignmentList } from './components/AssignmentList';
-import { CalendarView } from './components/CalendarView';
-import { WorkloadChart } from './components/WorkloadChart';
-import { WeeklyBreakdown } from './components/WeeklyBreakdown';
-import { FilterPanel } from './components/FilterPanel';
-import { AssignmentDetailsDialog } from './components/AssignmentDetailsDialog';
-import { AddAssignmentDialog } from './components/AddAssignmentDialog';
 import { EmptyState } from './components/EmptyState';
 import { Toaster, toast } from 'sonner';
-import { isFirebaseConfigured } from './lib/firebase';
-import {
-  createAssignment,
-  subscribeToAssignments,
-  updateAssignmentCompletion
-} from './services/assignmentService';
+
+const StatsBar = lazy(() => import('./components/StatsBar').then((module) => ({ default: module.StatsBar })));
+const PrioritySection = lazy(() => import('./components/PrioritySection').then((module) => ({ default: module.PrioritySection })));
+const CalendarView = lazy(() => import('./components/CalendarView').then((module) => ({ default: module.CalendarView })));
+const WorkloadChart = lazy(() => import('./components/WorkloadChart').then((module) => ({ default: module.WorkloadChart })));
+const WeeklyBreakdown = lazy(() => import('./components/WeeklyBreakdown').then((module) => ({ default: module.WeeklyBreakdown })));
+const FilterPanel = lazy(() => import('./components/FilterPanel').then((module) => ({ default: module.FilterPanel })));
+const AssignmentDetailsDialog = lazy(() => import('./components/AssignmentDetailsDialog').then((module) => ({ default: module.AssignmentDetailsDialog })));
+const AddAssignmentDialog = lazy(() => import('./components/AddAssignmentDialog').then((module) => ({ default: module.AddAssignmentDialog })));
+
+const isFirebaseConfigured = [
+  import.meta.env.VITE_FIREBASE_API_KEY,
+  import.meta.env.VITE_FIREBASE_AUTH_DOMAIN,
+  import.meta.env.VITE_FIREBASE_PROJECT_ID,
+  import.meta.env.VITE_FIREBASE_STORAGE_BUCKET,
+  import.meta.env.VITE_FIREBASE_MESSAGING_SENDER_ID,
+  import.meta.env.VITE_FIREBASE_APP_ID
+].every(Boolean);
+
+function SectionFallback() {
+  return (
+    <div className="rounded-lg border border-gray-200 bg-white px-6 py-8 text-sm text-gray-500">
+      Loading section...
+    </div>
+  );
+}
 
 function App() {
   // State management
@@ -46,23 +58,43 @@ function App() {
       return;
     }
 
-    const unsubscribe = subscribeToAssignments(
-      (nextAssignments) => {
-        setAssignments(nextAssignments);
-        setDatabaseError(null);
-        setIsLoading(false);
-      },
-      (error) => {
-        console.error(error);
-        setDatabaseError('Could not sync assignments from Firebase. Check your config and Firestore rules.');
-        setIsLoading(false);
-        toast.error('Firebase sync failed', {
-          description: error.message
-        });
-      }
-    );
+    let cancelled = false;
+    let unsubscribe = () => {};
 
-    return unsubscribe;
+    void (async () => {
+      try {
+        const { subscribeToAssignments } = await import('./services/assignmentService');
+
+        if (cancelled) {
+          return;
+        }
+
+        unsubscribe = subscribeToAssignments(
+          (nextAssignments) => {
+            setAssignments(nextAssignments);
+            setDatabaseError(null);
+            setIsLoading(false);
+          },
+          (error) => {
+            console.error(error);
+            setDatabaseError('Could not sync assignments from Firebase. Check your config and Firestore rules.');
+            setIsLoading(false);
+            toast.error('Firebase sync failed', {
+              description: error.message
+            });
+          }
+        );
+      } catch (error) {
+        console.error(error);
+        setDatabaseError('Could not initialize Firebase sync. Check your config and Firestore rules.');
+        setIsLoading(false);
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+      unsubscribe();
+    };
   }, []);
   
   // Get available courses
@@ -147,6 +179,7 @@ function App() {
 
     try {
       if (isFirebaseConfigured) {
+        const { updateAssignmentCompletion } = await import('./services/assignmentService');
         await updateAssignmentCompletion(
           currentAssignment.firestoreId || currentAssignment.id,
           nextCompleted
@@ -213,6 +246,7 @@ function App() {
 
   const handleAddAssignment = async (newAssignment: Assignment) => {
     if (isFirebaseConfigured) {
+      const { createAssignment } = await import('./services/assignmentService');
       await createAssignment(newAssignment);
     } else {
       setAssignments(prev => [...prev, newAssignment]);
@@ -258,15 +292,19 @@ function App() {
         ) : (
           <>
             {/* Stats Bar */}
-            <StatsBar assignments={enrichedAssignments} />
+            <Suspense fallback={<SectionFallback />}>
+              <StatsBar assignments={enrichedAssignments} />
+            </Suspense>
             
             {/* Priority Section - Only show in list view and if incomplete filter */}
             {viewMode === 'list' && filterBy !== 'completed' && priorityAssignments.length > 0 && (
-              <PrioritySection
-                assignments={priorityAssignments}
-                onAssignmentClick={handleAssignmentClick}
-                onToggleComplete={toggleComplete}
-              />
+              <Suspense fallback={<SectionFallback />}>
+                <PrioritySection
+                  assignments={priorityAssignments}
+                  onAssignmentClick={handleAssignmentClick}
+                  onToggleComplete={toggleComplete}
+                />
+              </Suspense>
             )}
             
             {/* Main Content */}
@@ -283,51 +321,61 @@ function App() {
                   onToggleComplete={toggleComplete}
                 />
               ) : (
-                <CalendarView
-                  assignments={filteredAssignments}
-                  onAssignmentClick={handleAssignmentClick}
-                />
+                <Suspense fallback={<SectionFallback />}>
+                  <CalendarView
+                    assignments={filteredAssignments}
+                    onAssignmentClick={handleAssignmentClick}
+                  />
+                </Suspense>
               )}
             </div>
             
             {/* Data Visualization */}
             {filterBy !== 'completed' && (
-              <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mt-8">
-                <WorkloadChart assignments={enrichedAssignments} />
-                <WeeklyBreakdown assignments={enrichedAssignments} />
-              </div>
+              <Suspense fallback={<SectionFallback />}>
+                <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mt-8">
+                  <WorkloadChart assignments={enrichedAssignments} />
+                  <WeeklyBreakdown assignments={enrichedAssignments} />
+                </div>
+              </Suspense>
             )}
           </>
         )}
       </main>
       
       {/* Filter Panel */}
-      <FilterPanel
-        show={showFilters}
-        selectedCourses={selectedCourses}
-        availableCourses={availableCourses}
-        selectedPriorities={selectedPriorities}
-        onCourseToggle={handleCourseToggle}
-        onPriorityToggle={handlePriorityToggle}
-        onClose={() => setShowFilters(false)}
-        onClearAll={clearAllFilters}
-      />
+      <Suspense fallback={null}>
+        <FilterPanel
+          show={showFilters}
+          selectedCourses={selectedCourses}
+          availableCourses={availableCourses}
+          selectedPriorities={selectedPriorities}
+          onCourseToggle={handleCourseToggle}
+          onPriorityToggle={handlePriorityToggle}
+          onClose={() => setShowFilters(false)}
+          onClearAll={clearAllFilters}
+        />
+      </Suspense>
       
       {/* Assignment Details Dialog */}
-      <AssignmentDetailsDialog
-        assignment={selectedAssignment}
-        open={selectedAssignment !== null}
-        onClose={() => setSelectedAssignment(null)}
-        onToggleComplete={handleToggleCompleteFromDialog}
-      />
+      <Suspense fallback={null}>
+        <AssignmentDetailsDialog
+          assignment={selectedAssignment}
+          open={selectedAssignment !== null}
+          onClose={() => setSelectedAssignment(null)}
+          onToggleComplete={handleToggleCompleteFromDialog}
+        />
+      </Suspense>
 
       {/* Add Assignment Dialog */}
-      <AddAssignmentDialog
-        open={showAddDialog}
-        onClose={() => setShowAddDialog(false)}
-        onAddAssignment={handleAddAssignment}
-        availableCourses={availableCourses}
-      />
+      <Suspense fallback={null}>
+        <AddAssignmentDialog
+          open={showAddDialog}
+          onClose={() => setShowAddDialog(false)}
+          onAddAssignment={handleAddAssignment}
+          availableCourses={availableCourses}
+        />
+      </Suspense>
 
       {/* Toast Notifications */}
       <Toaster position="bottom-right" />
